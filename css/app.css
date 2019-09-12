@@ -34,7 +34,7 @@ video {
 .menu {
   position: absolute;
   right: 1vw;
-  bottom: 2vh;
+  bottom: 3vh;
   display: flex;
   justify-content: flex-end;
   align-items: center;

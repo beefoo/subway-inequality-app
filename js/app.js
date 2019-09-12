@@ -46,7 +46,6 @@ var App = (function() {
     console.log('Loaded videos:', videoMap);
     this.videos = videoMap;
 
-    this.activeVideo = videoMap[activeSubway];
     this.activeSubway = '';
 
     this.loadListeners();
@@ -77,7 +76,10 @@ var App = (function() {
     if (this.debug) console.log('Playing: '+subway);
     var _this = this;
 
-    this.videos[subway].$player.animate({volume: 1.0}, 2000);
+    var video = this.videos[subway];
+    if (!video.active) return;
+
+    video.$player.animate({volume: 1.0}, 2000);
 
     // hide all other subways
     $('.video, .pulse').removeClass('active');
@@ -94,11 +96,11 @@ var App = (function() {
     var _this = this;
     var video = this.videos[subway];
     var player = video.player;
-    if (player.playing) {
+    if (player.playing && !video.active) {
       video.$player.animate({volume: 0.0}, 2000);
       video.pauseTimeout = setTimeout(function(){
         if (_this.debug) console.log('Pause: '+subway);
-        player.pause();
+        if (!_this.videos[subway].active) player.pause();
       }, 2000);
     }
   };
@@ -106,6 +108,7 @@ var App = (function() {
   App.prototype.playVideo = function(subway){
     var player = this.videos[subway].player;
     if (!player.playing) player.play();
+    else this.onPlaying(subway);
   };
 
   App.prototype.select = function(subway){
@@ -128,7 +131,6 @@ var App = (function() {
     $('.radio[data-subway="'+subway+'"]').addClass('active');
 
     this.playVideo(subway);
-    this.activeVideo = this.videos[subway];
 
   };
 
