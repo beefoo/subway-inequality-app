@@ -7,13 +7,47 @@ var App = (function() {
   }
 
   App.prototype.init = function(){
+    this.debug = true;
     this.started = false;
 
-    this.$activeVideo = $('.video.active').first();
-    this.activeVideo = this.$activeVideo.find('video').first();
-    this.$activeButton = $('.radio.active').first();
-    this.$activePulse = $('.pulse.active').first();
-    this.activeSubway = this.$activeButton.attr('data-subway');
+    // add playing property to videos
+    Object.defineProperty(HTMLMediaElement.prototype, 'playing', {
+      get: function(){
+        return !!(this.currentTime > 0 && !this.paused && !this.ended && this.readyState > 2);
+      }
+    });
+
+    // gather video metadata
+    var activeSubway = '2';
+    var videos = $.map($('.video'), function(el, i) {
+      var $video = $(el);
+      if ($video.hasClass('active')) activeSubway = $video.attr('data-subway');
+      var $player = $video.find('video').first();
+      // set volume to zero
+      $player[0].volume = 0.0;
+      // seek to 10 seconds in
+      $player[0].currentTime = 10.0;
+      return {
+        'id': $video.attr('data-subway'),
+        'duration': parseFloat($video.attr('data-duration')),
+        '$el': $video,
+        '$player': $player,
+        'player': $player[0],
+        'active': $video.hasClass('active'),
+        'pauseTimeout': false
+      }
+    });
+
+    // create a look-up
+    var videoMap = videos.reduce(function(map, obj) {
+      map[obj.id] = obj;
+      return map;
+    }, {});
+    console.log('Loaded videos:', videoMap);
+    this.videos = videoMap;
+
+    this.activeVideo = videoMap[activeSubway];
+    this.activeSubway = '';
 
     this.loadListeners();
   };
@@ -27,37 +61,74 @@ var App = (function() {
     });
 
     $('.radio').on('click', function(e){
+      e.stopPropagation();
       var subway = $(this).attr('data-subway');
       _this.select(subway);
     });
+
+    $.each(this.videos, function(id, video) {
+      video.player.addEventListener('playing', function(){
+        _this.onPlaying(id);
+      });
+    });
+  };
+
+  App.prototype.onPlaying = function(subway){
+    if (this.debug) console.log('Playing: '+subway);
+    var _this = this;
+
+    this.videos[subway].$player.animate({volume: 1.0}, 2000);
+
+    // hide all other subways
+    $('.video, .pulse').removeClass('active');
+    // show current subway
+    $('.video[data-subway="'+subway+'"], .pulse[data-subway="'+subway+'"]').addClass('active');
+
+    // pause other playing videos
+    $.each(this.videos, function(id, video) {
+      if (!video.active) _this.pauseVideo(id);
+    });
+  };
+
+  App.prototype.pauseVideo = function(subway){
+    var _this = this;
+    var video = this.videos[subway];
+    var player = video.player;
+    if (player.playing) {
+      video.$player.animate({volume: 0.0}, 2000);
+      video.pauseTimeout = setTimeout(function(){
+        if (_this.debug) console.log('Pause: '+subway);
+        player.pause();
+      }, 2000);
+    }
+  };
+
+  App.prototype.playVideo = function(subway){
+    var player = this.videos[subway].player;
+    if (!player.playing) player.play();
   };
 
   App.prototype.select = function(subway){
-    if (subway === this.activeSubway) {
-      if (!this.started) {
-        // play current video
-        this.started = true;
-      }
-      return;
-    }
+    var _this = this;
+
+    if (subway === this.activeSubway && this.started) return;
+
     this.activeSubway = subway;
+    this.started = true;
 
-    // toggle active states
-    var $activeVideo = $('.video[data-subway="'+subway+'"]');
-    var $activeButton = $('.radio[data-subway="'+subway+'"]');
-    var $activePulse = $('.pulse[data-subway="'+subway+'"]');
-    this.$activeVideo.removeClass('active');
-    this.$activeButton.removeClass('active');
-    this.$activePulse.removeClass('active');
-    $activeVideo.addClass('active');
-    $activeButton.addClass('active');
-    $activePulse.addClass('active');
-    this.$activeVideo = $activeVideo;
-    this.$activeButton = $activeButton;
-    this.$activePulse = $activePulse;
+    $.each(this.videos, function(id, video) {
+      _this.videos[id].active = (id===subway);
+      // clear existing pause timeouts
+      if (video.pauseTimeout) clearTimeout(video.pauseTimeout);
+    });
 
-    // stop current video
-    // start new video
+    // hide all other radios
+    $('.radio').removeClass('active');
+    // show current radio
+    $('.radio[data-subway="'+subway+'"]').addClass('active');
+
+    this.playVideo(subway);
+    this.activeVideo = this.videos[subway];
 
   };
 
