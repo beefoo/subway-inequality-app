@@ -43,6 +43,8 @@ video {
   font-size: 1.75rem;
   margin: 0 0.75vw 0 0;
   letter-spacing: 0.075rem;
+  z-index: 10;
+  position: relative;
 }
 .menu ul {
   list-style: none;
@@ -51,6 +53,7 @@ video {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
 }
 .menu li {
   margin: 0;
@@ -103,7 +106,12 @@ video {
   margin-top: -5vh;
   margin-left: -5vh;
   border-radius: 50%;
-  background: #999;
+  background: #444;
+  opacity: 0;
+  transition: opacity 2s ease-in-out;
+}
+.pulse.active {
+  opacity: 1;
 }
 
 /* Minimum aspect ratio (for very wide screens) */

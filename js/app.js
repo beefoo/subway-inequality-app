@@ -7,8 +7,9 @@ var App = (function() {
   }
 
   App.prototype.init = function(){
-    this.debug = true;
+    this.debug = false;
     this.started = false;
+    this.rendering = false;
 
     // add playing property to videos
     Object.defineProperty(HTMLMediaElement.prototype, 'playing', {
@@ -21,20 +22,37 @@ var App = (function() {
     var activeSubway = '2';
     var videos = $.map($('.video'), function(el, i) {
       var $video = $(el);
-      if ($video.hasClass('active')) activeSubway = $video.attr('data-subway');
+      var id = $video.attr('data-subway');
+      if ($video.hasClass('active')) activeSubway = id;
       var $player = $video.find('video').first();
+      var player = $player[0];
       // set volume to zero
-      $player[0].volume = 0.0;
+      player.volume = 0.0;
       // seek to 10 seconds in
-      $player[0].currentTime = 10.0;
+      player.currentTime = 10.0;
+
+      // initialize the analyzer
+      var context = new AudioContext();
+      var src = context.createMediaElementSource(player);
+      var analyser = context.createAnalyser();
+      src.connect(analyser);
+      analyser.connect(context.destination);
+      analyser.fftSize = 256;
+      var bufferLength = analyser.frequencyBinCount;
+      var soundArray = new Uint8Array(bufferLength);
+
       return {
-        'id': $video.attr('data-subway'),
+        'id': id,
         'duration': parseFloat($video.attr('data-duration')),
         '$el': $video,
         '$player': $player,
-        'player': $player[0],
+        '$pulse': $('.pulse[data-subway="'+id+'"]').first(),
+        'player': player,
         'active': $video.hasClass('active'),
-        'pauseTimeout': false
+        'pauseTimeout': false,
+        'audioContext': context,
+        'analyser': analyser,
+        'soundArray': soundArray
       }
     });
 
@@ -86,6 +104,12 @@ var App = (function() {
     // show current subway
     $('.video[data-subway="'+subway+'"], .pulse[data-subway="'+subway+'"]').addClass('active');
 
+    // start the render loop
+    if (!this.rendering) {
+      this.rendering = true;
+      this.render();
+    }
+
     // pause other playing videos
     $.each(this.videos, function(id, video) {
       if (!video.active) _this.pauseVideo(id);
@@ -98,7 +122,7 @@ var App = (function() {
     var player = video.player;
     if (player.playing && !video.active) {
       video.$player.animate({volume: 0.0}, 2000);
-      video.pauseTimeout = setTimeout(function(){
+      this.videos[subway].pauseTimeout = setTimeout(function(){
         if (_this.debug) console.log('Pause: '+subway);
         if (!_this.videos[subway].active) player.pause();
       }, 2000);
@@ -111,11 +135,26 @@ var App = (function() {
     else this.onPlaying(subway);
   };
 
+  App.prototype.render = function(){
+    var _this = this;
+
+    var video = this.videos[this.activeSubway];
+    video.analyser.getByteFrequencyData(video.soundArray);
+
+    var scale = 1.0 + (video.soundArray[2] - 96.0) / 255.0;
+    video.$pulse.css('transform', 'scale3d('+scale+', '+scale+', '+scale+')');
+
+    requestAnimationFrame(function(){
+      _this.render();
+    });
+  };
+
   App.prototype.select = function(subway){
     var _this = this;
 
     if (subway === this.activeSubway && this.started) return;
 
+    var firstTime = !this.started;
     this.activeSubway = subway;
     this.started = true;
 
@@ -123,6 +162,7 @@ var App = (function() {
       _this.videos[id].active = (id===subway);
       // clear existing pause timeouts
       if (video.pauseTimeout) clearTimeout(video.pauseTimeout);
+      if (firstTime) video.audioContext.resume();
     });
 
     // hide all other radios
