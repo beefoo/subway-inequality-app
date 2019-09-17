@@ -4,7 +4,7 @@ A web app for kiosk display of videos generated from [this repository](https://g
 
 ## To Run
 
-This must be run on some kind of web server (i.e. not from a file path like `file://...`) due to CORS policy for streaming audio. This repository includes an express server using [Node.js](https://nodejs.org/en/)
+This must be run on some kind of web server (i.e. not from a file path like `file://...`) due to [CORS policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS/Errors/CORSRequestNotHttp) for streaming audio from non-http protocol. This repository includes an express server using [Node.js](https://nodejs.org/en/)
 
 ```
 npm install
