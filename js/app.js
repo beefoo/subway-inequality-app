@@ -26,20 +26,6 @@ var App = (function() {
       if ($video.hasClass('active')) activeSubway = id;
       var $player = $video.find('video').first();
       var player = $player[0];
-      // set volume to zero
-      player.volume = 0.0;
-      // seek to 10 seconds in
-      player.currentTime = 10.0;
-
-      // initialize the analyzer
-      var context = new AudioContext();
-      var src = context.createMediaElementSource(player);
-      var analyser = context.createAnalyser();
-      src.connect(analyser);
-      analyser.connect(context.destination);
-      analyser.fftSize = 256;
-      var bufferLength = analyser.frequencyBinCount;
-      var soundArray = new Uint8Array(bufferLength);
 
       return {
         'id': id,
@@ -50,9 +36,7 @@ var App = (function() {
         'player': player,
         'active': $video.hasClass('active'),
         'pauseTimeout': false,
-        'audioContext': context,
-        'analyser': analyser,
-        'soundArray': soundArray
+        'loaded': false
       }
     });
 
@@ -61,8 +45,10 @@ var App = (function() {
       map[obj.id] = obj;
       return map;
     }, {});
-    console.log('Loaded videos:', videoMap);
+    // console.log('Loaded videos:', videoMap);
     this.videos = videoMap;
+
+    this.loadVideos();
 
     this.activeSubway = '';
 
@@ -83,12 +69,46 @@ var App = (function() {
       _this.select(subway);
     });
 
-    $.each(this.videos, function(id, video) {
-      video.player.addEventListener('playing', function(){
-        _this.onPlaying(id);
-      });
+    document.addEventListener('contextmenu', function(e){
+      e.preventDefault();
     });
   };
+
+  App.prototype.loadVideos = function(){
+    var _this = this;
+    console.log(this.videos);
+
+    $.each(this.videos, function(id, v){
+      v.player.addEventListener('loadeddata', function() {
+         console.log("Loaded "+id);
+         // set volume to zero
+         v.player.volume = 0.0;
+         v.player.currentTime = 0.0;
+
+         // // initialize the analyzer
+         var context = new (window.AudioContext || window.webkitAudioContext)();
+         var src = context.createMediaElementSource(v.player);
+         var analyser = context.createAnalyser();
+         src.connect(analyser);
+         analyser.connect(context.destination);
+         analyser.fftSize = 256;
+         var bufferLength = analyser.frequencyBinCount;
+         var soundArray = new Uint8Array(bufferLength);
+
+         _this.videos[id].loaded = true;
+         _this.videos[id].audioContext = context;
+         _this.videos[id].analyser = analyser;
+         _this.videos[id].soundArray = soundArray;
+
+         v.player.addEventListener('playing', function(){
+           _this.onPlaying(id);
+         });
+
+      }, false);
+      v.player.load();
+    });
+
+  }
 
   App.prototype.onPlaying = function(subway){
     if (this.debug) console.log('Playing: '+subway);
@@ -139,10 +159,11 @@ var App = (function() {
     var _this = this;
 
     var video = this.videos[this.activeSubway];
-    video.analyser.getByteFrequencyData(video.soundArray);
-
-    var scale = 1.0 + (video.soundArray[2] - 96.0) / 255.0;
-    video.$pulse.css('transform', 'scale3d('+scale+', '+scale+', '+scale+')');
+    if (video.loaded) {
+      video.analyser.getByteFrequencyData(video.soundArray);
+      var scale = 1.0 + (video.soundArray[2] - 96.0) / 255.0;
+      video.$pulse.css('transform', 'scale3d('+scale+', '+scale+', '+scale+')');
+    }
 
     requestAnimationFrame(function(){
       _this.render();
